@@ -1,0 +1,355 @@
+{
+  "provider": "autogen_agentchat.teams.SelectorGroupChat",
+  "component_type": "team",
+  "version": 1,
+  "component_version": 1,
+  "description": "A team with 3 agents - a Web Surfer agent that can browse the web, a Verification Assistant that verifies and summarizes information, and a User Proxy that provides human feedback when needed.",
+  "label": "Doctor Doctor",
+  "config": {
+    "participants": [
+      {
+        "provider": "autogen_ext.agents.web_surfer.MultimodalWebSurfer",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "DoctorWebSurfer is a  agent that acts as a web surfer that can search the web and visit web pages to get doctor details to schedule appointments",
+        "label": "DoctorWebSurfer",
+        "config": {
+          "name": "websurfer_agent",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini"
+            }
+          },
+          "description": "an agent that solves tasks by browsing the web",
+          "headless": true,
+          "start_page": "https://www.bing.com/",
+          "animate_actions": false,
+          "to_save_screenshots": false,
+          "use_ocr": false,
+          "to_resize_viewport": true
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that provides assistance with tool use.",
+        "label": "AssistantAgent",
+        "config": {
+          "name": "assistant_agent",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini"
+            }
+          },
+          "tools": [],
+          "handoffs": [],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "an agent that verifies and summarizes information",
+          "system_message": "You are a task verification assistant who is working with a web surfer agent to solve tasks. At each point, check if the task has been completed as requested by the user. If the websurfer_agent responds and the task has not yet been completed, respond with what is left to do and then say 'keep going'. If and only when the task has been completed, summarize and present a final answer that directly addresses the user task in detail and then respond with TERMINATE.",
+          "model_client_stream": false,
+          "reflect_on_tool_use": false,
+          "tool_call_summary_format": "{result}"
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.UserProxyAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that can represent a human user through an input function.",
+        "label": "UserProxyAgent",
+        "config": {
+          "name": "user_proxy",
+          "description": "a human user that should be consulted only when the assistant_agent is unable to verify the information provided by the websurfer_agent"
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that provides assistance with booking doctor appointments",
+        "label": "Booking Agent",
+        "config": {
+          "name": "booking_agent",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini"
+            }
+          },
+          "tools": [
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "description": "get appointment details and store them in the database.\nuser_name refers to name of patient, \ndoctor_name refers to doctors name, \ndate refers to date of appointment,\ntime refers to at which the patient wants the appointment, \nservice refers to the type of service patient wants",
+              "label": "store appointments",
+              "config": {
+                "source_code": "from pymongo import MongoClient\nfrom pymongo.server_api import ServerApi\n\n# MongoDB Connection\nuri = \"mongodb+srv://reviewerscope:shashank123@artemis.ah3qj.mongodb.net/?retryWrites=true&w=majority&appName=artemis\"\nclient = MongoClient(uri, server_api=ServerApi('1'))\ndb = client[\"appointment_db\"]  # Database name\ncollection = db[\"appointments\"]  # Collection name\n\ndef store_appointment(user_name: str,doctor_name: str, date: str, time: str, service: str) -> str:\n    \"\"\"Stores user appointment details in MongoDB.\"\"\"\n    client = MongoClient(uri, server_api=ServerApi('1'))\n    db = client[\"appointment_db\"]  # Database name\n    collection = db[\"appointments\"]  # Collection name\n    appointment = {\n        \"user_name\":user_name,\n        \"doctor_name\": doctor_name,\n        \"date\": date,\n        \"time\": time,\n        \"service\": service\n    }\n    result = collection.insert_one(appointment)\n    client.close()\n    return f\"Appointment stored successfully with ID: {result.inserted_id}\"",
+                "name": "store_appointment",
+                "description": "Description of the new function",
+                "global_imports": [
+                  {
+                    "module": "pymongo",
+                    "imports": [
+                      "MongoClient"
+                    ]
+                  },
+                  {
+                    "module": "pymongo.server_api",
+                    "imports": [
+                      "ServerApi"
+                    ]
+                  }
+                ],
+                "has_cancellation_support": false
+              }
+            },
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "description": "A tool that performs basic arithmetic operations (addition, subtraction, multiplication, division).",
+              "label": "Calculator Tool",
+              "config": {
+                "source_code": "def calculator(a: float, b: float, operator: str) -> str:\n    try:\n        if operator == \"+\":\n            return str(a + b)\n        elif operator == \"-\":\n            return str(a - b)\n        elif operator == \"*\":\n            return str(a * b)\n        elif operator == \"/\":\n            if b == 0:\n                return \"Error: Division by zero\"\n            return str(a / b)\n        else:\n            return \"Error: Invalid operator. Please use +, -, *, or /\"\n    except Exception as e:\n        return f\"Error: {str(e)}\"\n",
+                "name": "calculator",
+                "description": "A simple calculator that performs basic arithmetic operations",
+                "global_imports": [],
+                "has_cancellation_support": false
+              }
+            }
+          ],
+          "handoffs": [],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "An agent that provides assistance with ability to use tools.",
+          "system_message": "You are an AI assistant designed to help users find doctor information and schedule new patient appointments. Your goal is to provide accurate details about available doctors, their specialties, locations, and appointment availability.\n\nGuidelines:\nDoctor Information: Retrieve and provide details on doctors, including name, specialty, location, and available time slots.\nAppointment Booking: Guide users through the scheduling process, confirming necessary details such as date, time, and reason for the visit.\nTone: Maintain a professional, polite, and patient-friendly tone.\n When done, say TERMINATE.",
+          "model_client_stream": false,
+          "reflect_on_tool_use": true,
+          "tool_call_summary_format": "{result}"
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "An agent that provides assistance with following up on users previous appointments and generating new doctor appointments",
+        "label": "Follow up Agent",
+        "config": {
+          "name": "follow_up_agent",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini"
+            }
+          },
+          "tools": [
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "description": "get appointment details and store them in the database.\nuser_name refers to name of patient, \ndoctor_name refers to doctors name, \ndate refers to date of appointment,\ntime refers to at which the patient wants the appointment, \nservice refers to the type of service patient wants",
+              "label": "store appointments",
+              "config": {
+                "source_code": "from pymongo import MongoClient\nfrom pymongo.server_api import ServerApi\n\n# MongoDB Connection\nuri = \"mongodb+srv://reviewerscope:shashank123@artemis.ah3qj.mongodb.net/?retryWrites=true&w=majority&appName=artemis\"\n\ndef get_appointments():\n    client = MongoClient(uri, server_api=ServerApi('1'))\n    db = client[\"appointment_db\"]  # Database name\n    collection = db[\"appointments\"]  # Collection name\n\n    \"\"\"Retrieves all appointments from MongoDB.\"\"\"\n    appointments = list(collection.find({}, {\"_id\": 0}))  # Exclude `_id` field from output\n    client.close()\n    return appointments",
+                "name": "get_appointment",
+                "description": "Description of the new function",
+                "global_imports": [
+                  {
+                    "module": "pymongo",
+                    "imports": [
+                      "MongoClient"
+                    ]
+                  },
+                  {
+                    "module": "pymongo.server_api",
+                    "imports": [
+                      "ServerApi"
+                    ]
+                  }
+                ],
+                "has_cancellation_support": false
+              }
+            }
+          ],
+          "handoffs": [],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "An agent that provides assistance with ability to use tools.",
+          "system_message": "You are an AI assistant designed to help existing patients retrieve their records and schedule follow-up visits. Your role is to provide appointment details, retrieve relevant patient history, and assist in booking the next visit.\n\nGuidelines:\nPatient Records: Retrieve and summarize past appointment details, prescribed treatments, and follow-up recommendations (without exposing sensitive health data).\nFollow-up Booking: Assist in scheduling a follow-up visit based on the doctor’s availability and the patient’s needs.\nEscalation Criteria: Escalate if the patient requires urgent care, changes in treatment, prescription renewals, or insurance verification.\nTone: Maintain a professional, empathetic, and patient-friendly tone.\n When done, say TERMINATE.",
+          "model_client_stream": false,
+          "reflect_on_tool_use": true,
+          "tool_call_summary_format": "{result}"
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "description": "an agent that responds to users queries about their insurance",
+        "label": "Insurance Details Assistant",
+        "config": {
+          "name": "insurance_agent",
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "description": "Chat completion client for OpenAI hosted models.",
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini"
+            }
+          },
+          "tools": [
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "description": "Tool retrieves information details related to user query by similarity search",
+              "label": "Insurance retriever",
+              "config": {
+                "source_code": "def get_insurance_details(query: str):\n    vector_store = PineconeVectorStore(embedding=OpenAIEmbeddings(), index_name='pdf-rag', namespace='pdf_documents')\n    return str(vector_store.similarity_search(query))",
+                "name": "get_insurance_details",
+                "description": "Description of the new function",
+                "global_imports": [
+                  {
+                    "module": "langchain_pinecone",
+                    "imports": [
+                      "PineconeVectorStore"
+                    ]
+                  },
+                  {
+                    "module": "langchain_openai",
+                    "imports": [
+                      "OpenAIEmbeddings"
+                    ]
+                  }
+                ],
+                "has_cancellation_support": false
+              }
+            }
+          ],
+          "handoffs": [],
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "description": "An unbounded chat completion context that keeps a view of the all the messages.",
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "description": "an agent that verifies and summarizes information",
+          "system_message": "You are an AI assistant specializing in handling general insurance-related inquiries. Your role is to provide clear, concise, and accurate responses to user questions about insurance policies, coverage, claims, premiums, and other related topics.\n\nIf a question requires human intervention (e.g., policy-specific details, claim disputes, or legal matters), politely inform the user and escalate the request.\n\nGuidelines:\n\nClarity & Accuracy: Ensure responses are easy to understand and factually correct.\nEscalation Criteria: Escalate queries involving policy changes, claim disputes, personal account issues, or legal concerns.\nTone: Maintain a professional yet friendly tone.\nData Sensitivity: Do not ask for or store personal, financial, or sensitive data.\nResponse Format: Provide structured responses when applicable (e.g., bullet points for coverage details).\n When done, say TERMINATE.",
+          "model_client_stream": false,
+          "reflect_on_tool_use": false,
+          "tool_call_summary_format": "{result}"
+        }
+      }
+    ],
+    "model_client": {
+      "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+      "component_type": "model",
+      "version": 1,
+      "component_version": 1,
+      "description": "Chat completion client for OpenAI hosted models.",
+      "label": "OpenAIChatCompletionClient",
+      "config": {
+        "model": "gpt-4o-mini"
+      }
+    },
+    "termination_condition": {
+      "provider": "autogen_agentchat.base.OrTerminationCondition",
+      "component_type": "termination",
+      "version": 1,
+      "component_version": 1,
+      "label": "OrTerminationCondition",
+      "config": {
+        "conditions": [
+          {
+            "provider": "autogen_agentchat.conditions.MaxMessageTermination",
+            "component_type": "termination",
+            "version": 1,
+            "component_version": 1,
+            "description": "Terminate the conversation after a maximum number of messages have been exchanged.",
+            "label": "MaxMessageTermination",
+            "config": {
+              "max_messages": 20,
+              "include_agent_event": false
+            }
+          },
+          {
+            "provider": "autogen_agentchat.conditions.TextMentionTermination",
+            "component_type": "termination",
+            "version": 1,
+            "component_version": 1,
+            "description": "Terminate the conversation if a specific text is mentioned.",
+            "label": "TextMentionTermination",
+            "config": {
+              "text": "TERMINATE"
+            }
+          }
+        ]
+      }
+    },
+    "selector_prompt": "You are the cordinator of role play game. The following roles are available:\n{roles}. Given a task, the websurfer_agent will be tasked to address it by browsing the web and providing information.  The assistant_agent will be tasked with verifying the information provided by the websurfer_agent and summarizing the information to present a final answer to the user. If the task  needs assistance from a human user (e.g., providing feedback, preferences, or the task is stalled), you should select the user_proxy role to provide the necessary information.\n\nRead the following conversation. Then select the next role from {participants} to play. Only return the role.\n\n{history}\n\nRead the above conversation. Then select the next role from {participants} to play. Only return the role.",
+    "allow_repeated_speaker": false,
+    "max_selector_attempts": 3
+  }
+}
